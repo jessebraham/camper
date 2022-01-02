@@ -45,6 +45,10 @@ pub struct QueryResponseData {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Deserialize)]
 pub struct QueryItem {
     #[serde(deserialize_with = "deserialize_rfc2822_datetime")]
+    pub purchased: DateTime<Utc>,
+    pub item_url: String,
+    pub item_art_url: String,
+    #[serde(deserialize_with = "deserialize_rfc2822_datetime")]
     pub added: DateTime<Utc>,
     pub band_name: String,
     pub album_id: u32,
@@ -70,6 +74,7 @@ where
 pub struct QueryBuilder<'a> {
     url: &'a str,
     fan_id: u32,
+    identity: Option<&'a str>,
     token: Option<&'a str>,
 }
 
@@ -87,6 +92,12 @@ impl<'a> QueryBuilder<'a> {
         self
     }
 
+    pub fn identity(&mut self, identity: &'a str) -> &mut Self {
+        self.identity = Some(identity);
+
+        self
+    }
+
     pub fn token(&mut self, token: &'a str) -> &mut Self {
         self.token = Some(token);
 
@@ -99,13 +110,15 @@ impl<'a> QueryBuilder<'a> {
             None => utc_now_token(),
         };
 
-        let response = Client::new()
+        let mut client = Client::new()
             .post(self.url)
-            .json(&QueryRequestData::new(self.fan_id, token))
-            .send()
-            .await?
-            .json::<QueryResponseData>()
-            .await?;
+            .json(&QueryRequestData::new(self.fan_id, token));
+
+        if let Some(identity) = self.identity {
+            client = client.header("Cookie", format!("identity={}", identity));
+        }
+
+        let response = client.send().await?.json::<QueryResponseData>().await?;
 
         Ok(response)
     }

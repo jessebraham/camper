@@ -8,7 +8,6 @@ use anyhow::{bail, Result};
 use clap::{AppSettings, Parser};
 use comfy_table::{presets::UTF8_FULL, Attribute, Cell, CellAlignment, ContentArrangement, Table};
 use dialoguer::{theme::ColorfulTheme, Input, Select};
-use indicatif::{ProgressBar, ProgressStyle};
 use strum::VariantNames;
 
 use crate::{
@@ -151,41 +150,22 @@ fn configure(opts: ConfigureOpts) -> Result<()> {
 }
 
 async fn list(config: Config, opts: ListOpts) -> Result<()> {
-    // If a fan ID was provided as a command-line argument, use that; otherwise, use
-    // the configured ID.
+    // A fan ID can optionally be provided to list their collection(s) instead. By
+    // default, the configured fan ID will be used.
     let fan_id = opts.fan_id.or(config.fan_id).unwrap();
+    let identity = config.identity.unwrap();
 
-    // Create a progress spinner to indicate to the user that something is indeed
-    // happening, as this process can take some time depending on collection size
-    // and connection speed.
-    let pb = ProgressBar::new_spinner();
-    pb.enable_steady_tick(80);
-    pb.set_style(
-        ProgressStyle::default_spinner()
-            .tick_strings(&["🌑 ", "🌒 ", "🌓 ", "🌔 ", "🌕 ", "🌖 ", "🌗 ", "🌘 "])
-            .template("{spinner} {msg}"),
-    );
-    pb.set_message(format!(
-        "Loading {} items...",
-        if opts.wishlist {
-            "wishlist"
-        } else {
-            "collection"
-        }
-    ));
-
-    // Query all items from the appropriate list (ie. collection or wishlist),
-    // indicating completion via the progress spinner.
+    // Query all items from the specified collection. We make authenticated requests
+    // here to show any private or hidden items when listing the authenticated users
+    // collection(s).
     let items = if opts.wishlist {
-        Wishlist::list(fan_id).await?
+        Wishlist::list(fan_id, &identity).await?
     } else {
-        Collection::list(fan_id).await?
+        Collection::list(fan_id, &identity).await?
     };
-    let total = items.len();
+    let total_items = items.len();
 
-    pb.finish_and_clear();
-
-    // Print the results in a tabular format for easy grokking.
+    // Print the list of collection items in a tabular format for easy grokking.
     let mut table = Table::new();
     table
         .load_preset(UTF8_FULL)
@@ -207,7 +187,7 @@ async fn list(config: Config, opts: ListOpts) -> Result<()> {
     }
 
     eprintln!("{}", table);
-    eprintln!("\n{} items\n", total);
+    eprintln!("\n{} items\n", total_items);
 
     Ok(())
 }
