@@ -57,6 +57,12 @@ struct ConfigureOpts {
     /// Default audio file format to download
     #[clap(long, short, possible_values = Format::VARIANTS)]
     default_format: Option<Format>,
+    /// Overwrite existing values with the provided values
+    #[clap(long, short, takes_value = false)]
+    update: bool,
+    /// Print the current configuration, other options are ignored
+    #[clap(long, short, takes_value = false)]
+    print: bool,
 }
 
 #[derive(Debug, Parser)]
@@ -106,7 +112,7 @@ async fn main() -> Result<()> {
     }
 
     match opts.subcommand {
-        Configure(opts) => configure(opts),
+        Configure(opts) => configure(config, opts),
         List(opts) => list(config, opts).await,
         Download(opts) => download(config, opts).await,
         Sync(opts) => sync(config, opts).await,
@@ -116,7 +122,19 @@ async fn main() -> Result<()> {
 // ---------------------------------------------------------------------------
 // Subcommands
 
-fn configure(opts: ConfigureOpts) -> Result<()> {
+fn configure(config: Config, opts: ConfigureOpts) -> Result<()> {
+    if opts.print {
+        eprintln!("{}", config);
+    } else if opts.update {
+        configure_update(config, opts)?;
+    } else {
+        configure_create(opts)?;
+    }
+
+    Ok(())
+}
+
+fn configure_create(opts: ConfigureOpts) -> Result<()> {
     // For each required piece of information, if it was provided as a command-line
     // argument use that value, otherwise prompt the user to enter a value.
     let fan_id = unwrap_or_prompt(opts.fan_id, "Bandcamp fan ID");
@@ -145,6 +163,38 @@ fn configure(opts: ConfigureOpts) -> Result<()> {
     // '~/.camper/config.toml'.
     let config = Config::new(fan_id, identity, library, format);
     config.save()?;
+
+    Ok(())
+}
+
+fn configure_update(config: Config, opts: ConfigureOpts) -> Result<()> {
+    let mut config = config;
+
+    // For any provided options, update the corresponding value in the configuration
+    // file, and upon successfully saving print a message to the user to alert that
+    // this value has been updated.
+    let mut message = String::new();
+
+    if let Some(fan_id) = opts.fan_id {
+        message.push_str(&format!("Updated fan ID to {}\n", fan_id));
+        config.fan_id = Some(fan_id);
+    }
+    if let Some(identity) = opts.identity {
+        message.push_str(&format!("Updated identity to {}\n", identity));
+        config.identity = Some(identity);
+    }
+    if let Some(library) = opts.library {
+        let path = PathBuf::from(library);
+        message.push_str(&format!("Updated library to {}\n", path.display()));
+        config.library = Some(path);
+    }
+    if let Some(format) = opts.default_format {
+        message.push_str(&format!("Updated default format to {}\n", format));
+        config.format = Some(format);
+    }
+
+    config.save()?;
+    eprintln!("{}", message);
 
     Ok(())
 }

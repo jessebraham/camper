@@ -1,4 +1,9 @@
-use std::{fs, io::Write, path::PathBuf};
+use std::{
+    fmt::{Display, Formatter, Result as FmtResult},
+    fs,
+    io::Write as _,
+    path::PathBuf,
+};
 
 use anyhow::{bail, Context, Result};
 use directories::UserDirs;
@@ -94,5 +99,26 @@ impl Config {
         let path = path.join(Self::CONFIG_FILE);
 
         Ok(path)
+    }
+}
+
+impl Display for Config {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        let mut s = String::new();
+
+        if let Some(fan_id) = self.fan_id {
+            s.push_str(&format!("fan_id:   {}\n", fan_id));
+        }
+        if let Some(identity) = &self.identity {
+            s.push_str(&format!("identity: {}\n", identity));
+        }
+        if let Some(library) = &self.library {
+            s.push_str(&format!("library:  {}\n", library.display()));
+        }
+        if let Some(format) = self.format {
+            s.push_str(&format!("format:   {}\n", format.to_string()));
+        }
+
+        write!(f, "{}", s)
     }
 }

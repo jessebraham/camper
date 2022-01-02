@@ -1,8 +1,18 @@
 use serde::{Deserialize, Serialize};
-use strum_macros::{EnumString, EnumVariantNames, FromRepr};
+use strum_macros::{Display, EnumString, EnumVariantNames, FromRepr};
 
 #[derive(
-    Debug, Clone, Copy, PartialEq, Deserialize, Serialize, EnumString, EnumVariantNames, FromRepr,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Deserialize,
+    Serialize,
+    Display,
+    EnumString,
+    EnumVariantNames,
+    FromRepr,
 )]
 #[strum(serialize_all = "kebab_case")]
 pub enum Format {
