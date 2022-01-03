@@ -13,13 +13,15 @@ chrono       = "0.4"
 comfy-table  = "5.0"
 dialoguer    = "0.9"
 directories  = "4.0"
+env_logger   = "0.9"
 indicatif    = "0.16"
+log          = "0.4"
 strum        = "0.23"
 strum_macros = "0.23"
 toml         = "0.5"
 
 [dependencies.clap]
-version  = "3.0.0-rc.11"
+version  = "3.0"
 features = ["derive"]
 
 [dependencies.reqwest]

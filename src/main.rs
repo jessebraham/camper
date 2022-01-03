@@ -1,10 +1,12 @@
 use std::{
     fmt::{Debug, Display},
+    io::Write,
     path::PathBuf,
+    process,
     str::FromStr,
 };
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 use clap::{AppSettings, Parser};
 use comfy_table::{presets::UTF8_FULL, Attribute, Cell, CellAlignment, ContentArrangement, Table};
 use dialoguer::{theme::ColorfulTheme, Input, Select};
@@ -99,6 +101,9 @@ struct SyncOpts {
 async fn main() -> Result<()> {
     use Subcommand::*;
 
+    // Configure and initialize the application logger. Logs to STDERR.
+    configure_logger();
+
     // Load the configuration file if it has been created, or the default
     // configuration values if not.
     let config = Config::load()?;
@@ -108,7 +113,10 @@ async fn main() -> Result<()> {
     // configure the application.
     let opts = Opts::parse();
     if !matches!(opts.subcommand, Configure(..)) && !config.is_valid() {
-        bail!("please run `camper configure` first");
+        log::error!(
+            "Missing or invalid configuration; please run `camper configure` and try again."
+        );
+        process::exit(1);
     }
 
     match opts.subcommand {
@@ -117,6 +125,38 @@ async fn main() -> Result<()> {
         Download(opts) => download(config, opts).await,
         Sync(opts) => sync(config, opts).await,
     }
+}
+
+// ---------------------------------------------------------------------------
+// Logging
+
+fn configure_logger() {
+    use env_logger::Builder;
+    use log::LevelFilter;
+
+    Builder::new()
+        .format(|buf, record| {
+            use env_logger::fmt::Color::*;
+            use log::Level::*;
+
+            let level = record.level();
+            let mut level_style = buf.style();
+
+            if level == Error {
+                level_style.set_color(Red);
+            } else if level == Warn {
+                level_style.set_color(Yellow);
+            }
+
+            writeln!(
+                buf,
+                "⛺ {: <7} - {}",
+                level_style.value(format!("[{}]", level)),
+                record.args()
+            )
+        })
+        .filter(None, LevelFilter::Info)
+        .init();
 }
 
 // ---------------------------------------------------------------------------
@@ -156,7 +196,8 @@ fn configure_create(opts: ConfigureOpts) -> Result<()> {
     // Verify that the library path does indeed exist.
     let library = PathBuf::from(library).canonicalize()?;
     if !library.exists() {
-        bail!("path does not exist: '{}'", library.display());
+        log::error!("library path does not exist: '{}'", library.display());
+        process::exit(1);
     }
 
     // Create and save the configuration to the config file location at
@@ -173,28 +214,30 @@ fn configure_update(config: Config, opts: ConfigureOpts) -> Result<()> {
     // For any provided options, update the corresponding value in the configuration
     // file, and upon successfully saving print a message to the user to alert that
     // this value has been updated.
-    let mut message = String::new();
+    let mut messages = vec![];
 
     if let Some(fan_id) = opts.fan_id {
-        message.push_str(&format!("Updated fan ID to {}\n", fan_id));
+        messages.push(format!("Updated fan ID to {}\n", fan_id));
         config.fan_id = Some(fan_id);
     }
     if let Some(identity) = opts.identity {
-        message.push_str(&format!("Updated identity to {}\n", identity));
+        messages.push(format!("Updated identity to {}\n", identity));
         config.identity = Some(identity);
     }
     if let Some(library) = opts.library {
         let path = PathBuf::from(library);
-        message.push_str(&format!("Updated library to {}\n", path.display()));
+        messages.push(format!("Updated library to {}\n", path.display()));
         config.library = Some(path);
     }
     if let Some(format) = opts.default_format {
-        message.push_str(&format!("Updated default format to {}\n", format));
+        messages.push(format!("Updated default format to {}\n", format));
         config.format = Some(format);
     }
 
     config.save()?;
-    eprintln!("{}", message);
+    for message in messages {
+        log::info!("{}", message);
+    }
 
     Ok(())
 }
